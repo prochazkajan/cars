@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#eaf0e2">
+<title>Autová matematika</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Baloo 2', ui-rounded, 'Segoe UI Rounded', system-ui, -apple-system, sans-serif; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--font);
+    background:#e4ece0;
+    color:#2f4a38;
+    -webkit-user-select:none; user-select:none;
+    overflow:hidden; touch-action:manipulation;
+  }
+  #app{position:fixed; inset:0; overflow:hidden}
+  button{font-family:var(--font)}
+
+  /* animations from the design */
+  @keyframes carZzz{0%{transform:translateY(6px) scale(.6);opacity:0}25%{opacity:.9}100%{transform:translateY(-30px) scale(1.15);opacity:0}}
+  @keyframes cloudDrift{0%{transform:translateX(0)}100%{transform:translateX(40px)}}
+  @keyframes driveIn{0%{opacity:0;transform:translateX(160px)}60%{opacity:1}100%{opacity:1;transform:translateX(0)}}
+  @keyframes glowSoft{0%,100%{opacity:.5}50%{opacity:.8}}
+  @keyframes hintFade{0%,100%{opacity:.55}50%{opacity:1}}
+  @keyframes idleBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @keyframes popCar{0%{opacity:0;transform:scale(.4) translateY(8px)}70%{transform:scale(1.12)}100%{opacity:1;transform:scale(1) translateY(0)}}
+  @keyframes riseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes shadesDrop{0%{transform:translateY(-34px);opacity:0}70%{opacity:1}100%{transform:translateY(0);opacity:1}}
+  @keyframes thinkPulse{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-3px) rotate(-1.6deg)}}
+
+  /* wait-lock (question screen) driven by a class, so unlocking doesn't rebuild the DOM */
+  .qroot{filter:saturate(1) brightness(1); transition:filter 1.5s ease}
+  .qroot.locked{filter:saturate(.35) brightness(.98)}
+  .mascot{animation:idleBob 3.6s ease-in-out infinite}
+  .qroot.locked .mascot{animation:thinkPulse 2.6s ease-in-out infinite}
+  .ans{
+    min-width:170px; min-height:96px; padding:0 26px; font-size:52px; font-weight:600; color:#2f4a38;
+    background:#fbfdf7; border:3px solid #cfe0d6; border-radius:32px; cursor:pointer;
+    box-shadow:0 14px 30px -14px rgba(40,60,50,.45);
+    transition:opacity 1.2s ease, transform .3s ease, box-shadow 1.2s ease, scale 1.2s cubic-bezier(.34,1.2,.64,1);
+  }
+  .ans:hover{transform:translateY(-5px)}
+  .ans:active{transform:translateY(-1px) scale(.97)}
+  .qroot.locked .ans{opacity:.42; scale:.95; pointer-events:none; box-shadow:0 2px 6px -4px rgba(40,60,50,.3)}
+
+  .hint{font-size:24px; font-weight:500; color:#7f9585; text-align:center; min-height:30px; animation:hintFade 3.2s ease-in-out infinite}
+  .btn-primary{color:#fff; background:#e07a4f; border:none; border-radius:44px; cursor:pointer;
+    box-shadow:0 16px 30px -12px rgba(180,90,50,.5); transition:transform .3s ease, box-shadow .3s ease}
+  .btn-primary:hover{transform:translateY(-4px); box-shadow:0 24px 38px -12px rgba(180,90,50,.58)}
+  .btn-green{color:#fff; background:#5fa86a; border:none; border-radius:44px; cursor:pointer;
+    box-shadow:0 16px 30px -12px rgba(60,140,80,.5); transition:transform .3s ease}
+  .btn-green:hover{transform:translateY(-4px)}
+  .btn-teal{color:#fff; background:#3f8a9c; border:none; border-radius:38px; cursor:pointer;
+    box-shadow:0 12px 24px -12px rgba(50,110,130,.6); transition:transform .3s ease}
+  .btn-teal:hover{transform:translateY(-4px)}
+  .gear{position:absolute; top:22px; right:22px; width:56px; height:56px; display:flex; align-items:center; justify-content:center;
+    background:#fbfdf7; border:3px solid #cfe0d6; border-radius:50%; cursor:pointer; z-index:40;
+    box-shadow:0 8px 18px -10px rgba(40,60,50,.4); transition:transform .4s ease}
+  .gear:hover{transform:rotate(40deg)}
+  .version{position:absolute; left:12px; bottom:9px; font-size:12px; color:#8aa08f; opacity:.7; z-index:50}
+
+  /* parent panel */
+  #parent{position:fixed; inset:0; background:rgba(40,55,45,.5); display:none; align-items:center; justify-content:center; z-index:60; padding:18px}
+  #parent.on{display:flex}
+  .pcard{background:#fbfdf7; border:3px solid #cfe0d6; border-radius:28px; box-shadow:0 20px 50px -20px rgba(40,60,50,.5);
+    width:min(460px,100%); padding:24px; animation:riseIn .4s ease both}
+  .pcard h3{margin:0 0 4px; font-size:24px; color:#2f7a48}
+  .pcard p{margin:0 0 14px; color:#7f9585; font-size:15px}
+  .pad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:8px}
+  .pad button{min-height:60px; font-size:26px; font-weight:700; border:none; border-radius:14px; background:#e2ecdd; color:#2f4a38; cursor:pointer}
+  .pad button:active{transform:translateY(2px)}
+  .gate-num{font-size:40px; font-weight:700; letter-spacing:10px; text-align:center; min-height:48px; color:#2f4a38}
+  .gate-err{color:#c0603a; font-size:14px; text-align:center; min-height:18px}
+  .prow button{width:100%; min-height:56px; border:none; border-radius:16px; font-size:17px; font-weight:700; cursor:pointer; margin-top:10px}
+  .btn-reset{background:#f6e2d8; color:#b0502f}
+  .btn-close{background:#e07a4f; color:#fff}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="parent"><div class="pcard" id="pcard"></div></div>
+<div class="version">v0.2</div>
+
+<script>
+"use strict";
+(function(){
+  /* ================= Autová matematika — v0.2 =================
+     Re-skin of the "Cars Math" design (calm green garage system,
+     "Racer" mascot). Two modes: Příklady (math) + Autíčka (counting).
+  ============================================================= */
+
+  var KEY = "autova-matematika-v0.2";
+  var PAL = ['#e07a4f','#4f95c8','#f2b53a','#5fa86a','#3f8a9c','#e88b7a','#2f7a48','#c98a4f'];
+
+  // ---------- persistence (graceful) ----------
+  var store = { lifetime:0 };
+  var haveLS = (function(){ try{localStorage.setItem('__t','1');localStorage.removeItem('__t');return true;}catch(e){return false;} })();
+  (function load(){
+    if(!haveLS) return;
+    try{ var r=localStorage.getItem(KEY); if(r){ var p=JSON.parse(r); if(p&&typeof p.lifetime==='number') store.lifetime=p.lifetime; } }catch(e){}
+  })();
+  function save(){ if(!haveLS) return; try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+
+  // ---------- state ----------
+  var S = { screen:'home', mode:'math', locked:false, feedback:null, showHelp:false,
+            difficulty:'std', problem:null, sessionCars:0, celebMood:'smile', unlockHint:'' };
+  var timer=null;
+
+  // ---------- utils ----------
+  function rnd(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+  function app(){ return document.getElementById('app'); }
+  function esc(){}
+
+  // soft two-tone honk (optional; guarded)
+  var AC=null;
+  function honk(){
+    try{
+      AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+      if(AC.state==='suspended') AC.resume();
+      var o=AC.createOscillator(), g=AC.createGain(), t=AC.currentTime;
+      o.type='sine'; o.connect(g); g.connect(AC.destination);
+      g.gain.setValueAtTime(0.0001,t); o.frequency.setValueAtTime(330,t);
+      g.gain.exponentialRampToValueAtTime(0.13,t+0.05);
+      o.frequency.setValueAtTime(392,t+0.13);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);
+      o.start(t); o.stop(t+0.42);
+    }catch(e){}
+  }
+
+  /* ---------- SVG: little car (from design) ---------- */
+  function carSVG(){
+    return '<svg viewBox="0 0 64 40" width="100%" height="100%" style="display:block;overflow:visible">'+
+      '<path d="M6 27 L13 15 Q15.5 11 20 11 L40 11 Q44.5 11 47.5 15 L54 25 L57 26 Q61 27 61 31 Q61 34 57 34 L7 34 Q3 34 3 30 Q3 27 6 27 Z" fill="currentColor"></path>'+
+      '<path d="M21 15 L37 15 L43 24 L21 24 Z" fill="#ffffff" opacity="0.5"></path>'+
+      '<circle cx="20" cy="34" r="6.5" fill="#28282c"></circle><circle cx="20" cy="34" r="2.5" fill="#d8d8d8"></circle>'+
+      '<circle cx="46" cy="34" r="6.5" fill="#28282c"></circle><circle cx="46" cy="34" r="2.5" fill="#d8d8d8"></circle>'+
+      '<circle cx="58" cy="28" r="2" fill="#fff2ab"></circle></svg>';
+  }
+  function carDiv(color, w, extra){
+    return '<div style="width:'+w+'px; height:'+(w*0.64)+'px; color:'+color+';'+(extra||'')+'">'+carSVG()+'</div>';
+  }
+
+  /* ---------- SVG: mascot "Racer" (from design) ---------- */
+  function racer(mood){
+    mood = mood||'normal';
+    var showEyes=(mood==='normal'||mood==='smile'), showGlasses=(mood==='cool'),
+        showSleepy=(mood==='sleepy'), bigSmile=(mood==='smile'), plainMouth=(mood!=='smile');
+    var s='<svg viewBox="0 0 200 214" width="100%" height="100%" style="display:block; overflow:visible">'+
+      '<ellipse cx="100" cy="196" rx="78" ry="12" fill="rgba(40,50,45,0.12)"></ellipse>'+
+      '<rect x="18" y="150" width="46" height="56" rx="18" fill="#26262b"></rect>'+
+      '<rect x="136" y="150" width="46" height="56" rx="18" fill="#26262b"></rect>'+
+      '<circle cx="41" cy="178" r="8" fill="#b9bdc2"></circle>'+
+      '<circle cx="159" cy="178" r="8" fill="#b9bdc2"></circle>'+
+      '<rect x="54" y="36" width="92" height="66" rx="28" fill="#22603a"></rect>'+
+      '<rect x="28" y="82" width="144" height="94" rx="32" fill="#2f7a48"></rect>'+
+      '<rect x="20" y="92" width="16" height="13" rx="6" fill="#22603a"></rect>'+
+      '<rect x="164" y="92" width="16" height="13" rx="6" fill="#22603a"></rect>'+
+      '<rect x="40" y="90" width="120" height="13" rx="6" fill="#3a9257"></rect>'+
+      '<rect x="62" y="46" width="76" height="46" rx="18" fill="#cfe6ee"></rect>'+
+      '<rect x="68" y="50" width="64" height="10" rx="5" fill="#e6f3f7"></rect>';
+    if(showEyes) s+='<g>'+
+      '<circle cx="83" cy="71" r="15" fill="#ffffff"></circle><circle cx="117" cy="71" r="15" fill="#ffffff"></circle>'+
+      '<circle cx="86" cy="73" r="8" fill="#33322f"></circle><circle cx="120" cy="73" r="8" fill="#33322f"></circle>'+
+      '<circle cx="89" cy="69" r="3" fill="#ffffff"></circle><circle cx="123" cy="69" r="3" fill="#ffffff"></circle></g>';
+    if(showGlasses) s+='<g style="animation:shadesDrop 1.4s cubic-bezier(.34,1.3,.6,1) both;">'+
+      '<path d="M64 66 L44 58" stroke="#1e2430" stroke-width="4.5" stroke-linecap="round"></path>'+
+      '<path d="M136 66 L156 58" stroke="#1e2430" stroke-width="4.5" stroke-linecap="round"></path>'+
+      '<rect x="64" y="60" width="34" height="24" rx="11" fill="#1e2430"></rect>'+
+      '<rect x="102" y="60" width="34" height="24" rx="11" fill="#1e2430"></rect>'+
+      '<rect x="95" y="67" width="10" height="6" rx="3" fill="#1e2430"></rect>'+
+      '<rect x="69" y="65" width="13" height="6" rx="3" fill="#4a5a72" opacity="0.8"></rect>'+
+      '<rect x="107" y="65" width="13" height="6" rx="3" fill="#4a5a72" opacity="0.8"></rect></g>';
+    if(showSleepy) s+='<g>'+
+      '<path d="M70 72 Q83 82 96 72" fill="none" stroke="#1f4a2e" stroke-width="4.5" stroke-linecap="round"></path>'+
+      '<path d="M104 72 Q117 82 130 72" fill="none" stroke="#1f4a2e" stroke-width="4.5" stroke-linecap="round"></path>'+
+      '<text x="150" y="52" font-family="\'Baloo 2\',sans-serif" font-size="22" font-weight="700" fill="#7f9585" style="animation:carZzz 3.6s ease-in-out infinite;">z</text>'+
+      '<text x="162" y="36" font-family="\'Baloo 2\',sans-serif" font-size="26" font-weight="700" fill="#7f9585" style="animation:carZzz 3.6s ease-in-out infinite 1.2s;">z</text>'+
+      '<text x="176" y="22" font-family="\'Baloo 2\',sans-serif" font-size="30" font-weight="700" fill="#7f9585" style="animation:carZzz 3.6s ease-in-out infinite 2.4s;">z</text></g>';
+    s+='<rect x="92" y="99" width="7" height="62" rx="3" fill="#eae2c8"></rect>'+
+      '<rect x="101" y="99" width="7" height="62" rx="3" fill="#eae2c8"></rect>'+
+      '<rect x="40" y="108" width="30" height="19" rx="9" fill="#ffe08a"></rect>'+
+      '<rect x="130" y="108" width="30" height="19" rx="9" fill="#ffe08a"></rect>'+
+      '<rect x="44" y="111" width="10" height="5" rx="2.5" fill="#fff6d4"></rect>'+
+      '<rect x="134" y="111" width="10" height="5" rx="2.5" fill="#fff6d4"></rect>';
+    if(bigSmile) s+='<g>'+
+      '<path d="M76 140 Q100 164 124 140" fill="none" stroke="#1f4a2e" stroke-width="6" stroke-linecap="round"></path>'+
+      '<circle cx="54" cy="132" r="11" fill="#f2a08a" opacity="0.55"></circle>'+
+      '<circle cx="146" cy="132" r="11" fill="#f2a08a" opacity="0.55"></circle></g>';
+    if(plainMouth) s+='<path d="M82 143 Q100 155 118 143" fill="none" stroke="#1f4a2e" stroke-width="5" stroke-linecap="round"></path>';
+    s+='<rect x="30" y="158" width="140" height="22" rx="11" fill="#cdd3d7"></rect>'+
+      '<rect x="84" y="163" width="32" height="12" rx="3" fill="#eceade"></rect></svg>';
+    return s;
+  }
+
+  var gearSVG='<svg width="28" height="28" viewBox="0 0 40 40"><circle cx="20" cy="20" r="12" fill="none" stroke="#7f9585" stroke-width="5" stroke-dasharray="4 4.3"></circle><circle cx="20" cy="20" r="4.5" fill="#7f9585"></circle></svg>';
+
+  /* ---------- counting-help visualisation (guides a non-reader) ----------
+     Cars are grouped in rows of five (tally-style) so they read at a glance.
+     + : two colour-coded groups side by side → count them ALL
+     − : cars that STAY (green) and cars that DRIVE AWAY (faded) → count the ones that stay
+     No numbers — the cars do the talking.
+  */
+  // one car; `leaving` = faded (driving away) for subtraction
+  function oneCar(color, delayIdx, leaving){
+    return carDiv(color, 46, ' animation:popCar .4s ease both; animation-delay:'+(delayIdx*0.05).toFixed(2)+'s;'+(leaving?' opacity:.3;':''));
+  }
+  // render `total` cars in rows of five; cars at index >= solidCount are faded (leaving)
+  function carRows(total, color, solidCount, fadeColor){
+    if(total<=0) return '<div style="width:46px; height:30px;"></div>';
+    if(solidCount==null) solidCount=total;
+    var rows='', idx=0;
+    for(var r=0, rn=Math.ceil(total/5); r<rn; r++){
+      var cells='';
+      for(var c=0; c<5 && idx<total; c++, idx++){
+        var leaving = idx>=solidCount;
+        cells += oneCar(leaving ? fadeColor : color, idx, leaving);
+      }
+      rows += '<div style="display:flex; gap:9px;">'+cells+'</div>';
+    }
+    return '<div style="display:flex; flex-direction:column; gap:9px; align-items:flex-start;">'+rows+'</div>';
+  }
+  function helpBox(p){
+    var PILL='display:flex; align-items:center; justify-content:center; background:#f1f5ee; border:2px solid #e0e9dc; border-radius:20px; padding:14px 16px;';
+    var inner;
+    if(p.op==='-'){
+      // all `a` cars together; the last `b` drive away (faded) → count the ones that stay
+      inner =
+        '<div style="'+PILL+'">'+carRows(p.a, '#5fa86a', p.a-p.b, '#c3b8a8')+'</div>'+
+        '<div style="color:#8aa08f; font-size:44px; line-height:1;">↩</div>';
+    } else {
+      inner =
+        '<div style="'+PILL+'">'+carRows(p.a, '#5fa86a')+'</div>'+
+        '<div style="font-size:46px; font-weight:700; color:#8aa08f;">+</div>'+
+        '<div style="'+PILL+' background:#faece2; border-color:#f0d9c8;">'+carRows(p.b, '#e07a4f')+'</div>';
+    }
+    return '<div style="display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; background:#fbfdf7; border:3px dashed #b8cbb0; border-radius:26px; padding:18px 22px; animation:riseIn .4s ease both; max-width:min(820px,94vw);">'+inner+'</div>';
+  }
+
+  /* ---------- problem generators ---------- */
+  function makeProblem(diff){
+    var a,b,op,answer;
+    for(var i=0;i<400;i++){
+      op = Math.random()<0.5 ? '+' : '-';
+      if(diff==='hard'){ a=rnd(10,19); b=rnd(2,9); } else { a=rnd(2,9); b=rnd(1,9); }
+      if(op==='-'){ if(a<b){ var t=a;a=b;b=t; } answer=a-b; } else answer=a+b;
+      if(answer<2) continue;
+      if(diff==='std' && (a>9||b>9||answer>20)) continue;
+      if(diff==='hard' && answer>30) continue;
+      break;
+    }
+    var opts=new Set([answer]);
+    while(opts.size<4){ var d=answer+rnd(-4,4); if(d>=0 && d!==answer) opts.add(d); }
+    var options=Array.from(opts).sort(function(){return Math.random()-0.5;});
+    return { kind:'math', a:a, b:b, op:op, answer:answer, options:options };
+  }
+  function makeCount(diff){
+    var n = diff==='hard' ? rnd(7,12) : rnd(3,6);
+    var opts=new Set([n]);
+    while(opts.size<4){ var d=n+rnd(-3,3); if(d>=1 && d!==n) opts.add(d); }
+    var options=Array.from(opts).sort(function(){return Math.random()-0.5;});
+    var cars=[]; for(var i=0;i<n;i++) cars.push(pick(PAL));
+    return { kind:'count', a:n, b:0, op:'', answer:n, options:options, cars:cars };
+  }
+
+  /* ---------- flow ---------- */
+  function startQuestion(diff, mode){
+    clearTimeout(timer);
+    if(mode) S.mode=mode;
+    S.difficulty = diff || S.difficulty;
+    S.problem = (S.mode==='count') ? makeCount(S.difficulty) : makeProblem(S.difficulty);
+    S.screen='q'; S.locked=true; S.feedback=null; S.showHelp=false;
+    render();
+    timer=setTimeout(function(){
+      S.locked=false;
+      var root=document.querySelector('.qroot');
+      if(root){ root.classList.remove('locked'); var h=document.getElementById('hint'); if(h) h.textContent=S.unlockHint; }
+    }, 3000);
+  }
+  function answer(v){
+    if(S.locked || S.feedback==='correct') return;
+    var p=S.problem;
+    if(v===p.answer){
+      S.feedback='correct';
+      S.sessionCars += p.answer;
+      store.lifetime += p.answer; save();
+      S.celebMood = pick(['smile','smile','cool']);
+      honk();
+      render();
+    } else {
+      S.feedback='wrong';
+      render();
+    }
+  }
+  function endDay(){ clearTimeout(timer); S.screen='summary'; render(); }
+  function backHome(){ clearTimeout(timer); S.screen='home'; S.feedback=null; S.locked=false; S.difficulty='std'; S.sessionCars=0; S.problem=null; render(); }
+
+  /* ---------- screens ---------- */
+  function homeScreen(){
+    var cars='';
+    for(var i=0;i<4;i++) cars+=carDiv(PAL[(i+1)%PAL.length], 74);
+    return ''+
+    '<div style="position:absolute; inset:0; background:linear-gradient(180deg,#dfeae5 0%,#eaf0e2 50%,#e7ded0 100%); animation:riseIn .6s ease both;">'+
+      '<div style="position:absolute; left:8%; top:13%; width:120px; height:40px; background:#fbfdf7; border-radius:30px; opacity:.8; animation:cloudDrift 14s ease-in-out infinite alternate;"></div>'+
+      '<div style="position:absolute; right:14%; top:21%; width:90px; height:32px; background:#fbfdf7; border-radius:30px; opacity:.65; animation:cloudDrift 18s ease-in-out infinite alternate;"></div>'+
+      '<div style="position:absolute; left:-10%; right:-10%; bottom:0; height:40%; background:linear-gradient(180deg,#bccfa6 0%,#a3bb8a 100%); border-radius:46% 54% 0 0 / 22% 20% 0 0;"></div>'+
+      '<div style="position:absolute; left:0; right:0; bottom:0; height:15%; background:#6f7a80;"></div>'+
+      '<div style="position:absolute; left:0; right:0; bottom:7%; height:6px; background:repeating-linear-gradient(90deg,#eae2c8 0 46px,transparent 46px 92px);"></div>'+
+      '<div style="position:absolute; left:0; right:0; bottom:2%; display:flex; justify-content:center; gap:30px; z-index:8;">'+cars+'</div>'+
+      '<button class="gear" data-action="gear" aria-label="Nastavení pro rodiče">'+gearSVG+'</button>'+
+      '<div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; z-index:30; padding:24px;">'+
+        '<div style="position:relative; background:#fbfdf7; border:3px solid #cfe0d6; border-radius:28px; padding:18px 30px; max-width:600px; box-shadow:0 14px 34px -16px rgba(40,60,50,.4); font-size:clamp(21px,3.2vmin,29px); font-weight:500; color:#33463b; text-align:center; line-height:1.3;">'+
+          'Ahoj, kamaráde! Co si dnes zahrajeme?'+
+          '<div style="position:absolute; left:50%; bottom:-13px; width:24px; height:24px; background:#fbfdf7; border-right:3px solid #cfe0d6; border-bottom:3px solid #cfe0d6; transform:translateX(-50%) rotate(45deg); border-radius:0 0 7px 0;"></div>'+
+        '</div>'+
+        '<div style="width:190px; height:200px; animation:idleBob 3.6s ease-in-out infinite; transform-origin:center bottom; margin-top:6px;">'+racer('normal')+'</div>'+
+        '<div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center; margin-top:8px;">'+
+          '<button class="btn-primary" data-action="play-math" style="min-width:210px; min-height:96px; padding:0 40px; font-size:clamp(28px,4.4vmin,40px); font-weight:600; display:flex; align-items:center; gap:14px;"><span style="font-size:1.15em">＋</span> Příklady</button>'+
+          '<button class="btn-green" data-action="play-count" style="min-width:210px; min-height:96px; padding:0 40px; font-size:clamp(28px,4.4vmin,40px); font-weight:600; display:flex; align-items:center; gap:14px;"><span style="width:46px;height:30px;display:inline-block;color:#fff">'+carSVG()+'</span> Autíčka</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function qScreen(){
+    var p=S.problem, correct=(S.feedback==='correct'), isCount=(S.mode==='count');
+    var opSym = p ? (p.op==='-' ? '−' : (p.op==='+' ? '+' : '')) : '';
+    S.unlockHint = correct ? 'Paráda!' : (isCount ? 'Spočítej autíčka' : 'Vyber správný počet');
+    var hintText = S.locked ? 'přemýšlej…' : S.unlockHint;
+    var mascotMood = correct ? S.celebMood : 'normal';
+    var diffLabel = S.difficulty==='hard' ? 'Těžší' : 'Lehčí';
+    var diffColor = S.difficulty==='hard' ? '#3f8a9c' : '#5fa86a';
+
+    // center block: equation (math) or cars card (count)
+    var centerBlock;
+    if(isCount){
+      var cc=''; for(var i=0;i<p.cars.length;i++) cc+=carDiv(p.cars[i], 52, ' animation:popCar .4s ease both; animation-delay:'+(i*0.05).toFixed(2)+'s;');
+      centerBlock =
+        '<div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; max-width:640px; background:#fbfdf7; border:3px dashed #b8cbb0; border-radius:28px; padding:22px 26px;">'+cc+'</div>'+
+        '<div style="display:flex; align-items:center; gap:12px; font-size:clamp(30px,5vmin,52px); font-weight:600; color:#2f4a38;"><span style="width:44px;height:28px;display:inline-block;color:#5fa86a">'+carSVG()+'</span> Kolik autíček?</div>';
+    } else {
+      var help = S.showHelp ? helpBox(p) : '';
+      centerBlock = help +
+        '<div style="font-size:clamp(52px,9vmin,110px); font-weight:600; color:#2f4a38; line-height:1; white-space:nowrap;">'+p.a+' '+opSym+' '+p.b+' = ?</div>';
+    }
+
+    // right block: answers OR reward
+    var rightBlock;
+    if(correct){
+      var arr=''; for(var m=0;m<p.answer;m++) arr+=carDiv(PAL[m%PAL.length], 52, ' animation:driveIn .7s ease both; animation-delay:'+(m*0.06).toFixed(2)+'s;');
+      var rewardTitle = isCount ? ('Napočítal jsi '+p.answer+' autíček!') : ('Přijelo '+p.answer+' autíček!');
+      rightBlock =
+        '<div style="display:flex; flex-direction:column; align-items:center; gap:16px; max-width:520px;">'+
+          '<div style="font-size:32px; font-weight:600; color:#2f7a48; line-height:1.15; text-align:center;">'+rewardTitle+'</div>'+
+          '<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:480px;">'+arr+'</div>'+
+          '<div style="font-size:22px; font-weight:500; color:#5f7566; text-align:center;">Chceš, aby byl další příklad těžší?</div>'+
+          '<div style="display:flex; flex-wrap:wrap; gap:14px; justify-content:center;">'+
+            '<button class="btn-teal" data-action="next-harder" style="min-height:70px; padding:0 34px; font-size:26px; font-weight:600;">Ano, těžší</button>'+
+            '<button class="btn-green" data-action="next-same" style="min-height:70px; padding:0 34px; font-size:26px; font-weight:600; border-radius:38px;">Další</button>'+
+          '</div>'+
+          '<button data-action="end-day" style="min-height:48px; padding:0 20px; font-size:18px; font-weight:600; color:#8aa08f; background:transparent; border:none; cursor:pointer;">Dost na dnešek →</button>'+
+        '</div>';
+    } else {
+      var opts='';
+      for(var q=0;q<p.options.length;q++) opts+='<button class="ans" data-action="answer" data-val="'+p.options[q]+'">'+p.options[q]+'</button>';
+      var toggle = isCount ? '' :
+        '<button data-action="toggle-help" style="min-height:52px; padding:0 26px; display:flex; align-items:center; gap:10px; font-size:20px; font-weight:600; color:#4f6b58; background:#e2ecdd; border:3px solid #cfe0d6; border-radius:30px; cursor:pointer;">'+(S.showHelp?'Schovat autíčka':'Spočítat autíčka')+'</button>';
+      var wrong = S.feedback==='wrong' ?
+        '<div style="font-size:24px; font-weight:600; color:#5f7566; text-align:center; max-width:420px; animation:riseIn .4s ease both;">Skoro! Zkus to ještě jednou — máš na to čas.</div>' : '';
+      rightBlock =
+        '<div style="display:flex; flex-direction:column; align-items:center; gap:18px;">'+
+          '<div style="display:grid; grid-template-columns:repeat(2,1fr); gap:20px;">'+opts+'</div>'+
+          toggle + wrong +
+        '</div>';
+    }
+
+    return ''+
+    '<div class="qroot'+(S.locked?' locked':'')+'" style="position:absolute; inset:0; background:linear-gradient(180deg,#eef1ea 0%,#e4ece0 100%); animation:riseIn .55s ease both; display:flex; flex-direction:column;">'+
+      '<div style="width:100%; display:flex; align-items:center; justify-content:space-between; padding:18px 26px 6px; gap:14px;">'+
+        '<div style="display:flex; align-items:center; gap:10px; font-size:20px; font-weight:600; color:#5f7566;">'+
+          '<div style="width:34px; height:22px; color:#2f7a48;">'+carSVG()+'</div> Garáž: '+store.lifetime+
+        '</div>'+
+        '<div style="display:flex; align-items:center; gap:8px; font-size:16px; font-weight:600; color:#fff; background:'+diffColor+'; padding:6px 16px; border-radius:20px;">'+diffLabel+'</div>'+
+      '</div>'+
+      '<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:8px 20px 30px; overflow-y:auto;">'+
+        centerBlock +
+        '<div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:28px 52px; width:100%; max-width:940px;">'+
+          '<div style="display:flex; flex-direction:column; align-items:center; gap:12px; width:180px;">'+
+            '<div class="mascot" style="width:168px; height:178px; transform-origin:center bottom;">'+racer(mascotMood)+'</div>'+
+            '<div class="hint" id="hint">'+hintText+'</div>'+
+          '</div>'+
+          rightBlock +
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function summaryScreen(){
+    var parked=''; var pc=Math.min(S.sessionCars,40);
+    for(var i=0;i<pc;i++) parked+=carDiv(PAL[i%PAL.length], 52, ' filter:drop-shadow(0 0 8px rgba(248,224,158,.8));');
+    return ''+
+    '<div style="position:absolute; inset:0; background:linear-gradient(180deg,#f2cf9a 0%,#dba088 44%,#93a3c2 100%); animation:riseIn .7s ease both; overflow:hidden;">'+
+      '<div style="position:absolute; left:50%; bottom:6%; width:min(620px,92%); height:460px; transform:translateX(-50%); background:radial-gradient(circle at center, rgba(248,224,158,.68) 0%, rgba(248,224,158,.22) 42%, rgba(248,224,158,0) 70%); animation:glowSoft 6s ease-in-out infinite; z-index:1;"></div>'+
+      '<div style="position:absolute; left:-10%; right:-10%; bottom:0; height:34%; background:linear-gradient(180deg,#8fa778 0%,#7d976a 100%); border-radius:46% 54% 0 0 / 22% 20% 0 0; z-index:2;"></div>'+
+      '<div style="position:absolute; left:0; right:0; bottom:0; height:13%; background:#727c84; z-index:3;"></div>'+
+      '<div style="position:absolute; left:0; right:0; bottom:1.5%; display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-end; gap:10px 12px; padding:0 30px; z-index:4;">'+parked+'</div>'+
+      '<div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; z-index:20; padding:24px;">'+
+        '<div style="position:relative; background:#fbfdf7; border:3px solid #dfd0bc; border-radius:26px; padding:14px 28px; box-shadow:0 14px 34px -16px rgba(60,50,40,.4); font-size:26px; font-weight:500; color:#5a4a3a;">'+
+          'Dobrou noc…'+
+          '<div style="position:absolute; left:50%; bottom:-13px; width:24px; height:24px; background:#fbfdf7; border-right:3px solid #dfd0bc; border-bottom:3px solid #dfd0bc; transform:translateX(-50%) rotate(45deg); border-radius:0 0 7px 0;"></div>'+
+        '</div>'+
+        '<div style="width:190px; height:200px; animation:idleBob 4.4s ease-in-out infinite; transform-origin:center bottom; margin-top:6px;">'+racer('sleepy')+'</div>'+
+        '<div style="font-size:clamp(26px,5vmin,46px); font-weight:600; color:#4a4234; text-align:center; max-width:760px; line-height:1.25; margin-top:6px; text-shadow:0 2px 12px rgba(255,244,214,.7);">Garáž se zavírá.<br>Dnes k nám přijelo '+S.sessionCars+' autíček!</div>'+
+        '<button class="btn-primary" data-action="back-home" style="margin-top:18px; min-width:230px; min-height:84px; padding:0 52px; font-size:clamp(28px,4vmin,38px); font-weight:600;">Zpět do garáže</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function render(){
+    var html;
+    if(S.screen==='home') html=homeScreen();
+    else if(S.screen==='q') html=qScreen();
+    else html=summaryScreen();
+    app().innerHTML=html;
+  }
+
+  /* ---------- parent panel (gated by 17) ---------- */
+  var gateVal='';
+  function openParent(){ gateVal=''; document.getElementById('parent').classList.add('on'); renderGate(); }
+  function closeParent(){ document.getElementById('parent').classList.remove('on'); }
+  function renderGate(){
+    document.getElementById('pcard').innerHTML=
+      '<h3>Nastavení pro rodiče</h3><p>Zadej číslo <b>17</b>.</p>'+
+      '<div class="gate-num" id="gnum">'+(gateVal||'–')+'</div>'+
+      '<div class="gate-err" id="gerr"></div>'+
+      '<div class="pad" id="pad">'+
+        ['1','2','3','4','5','6','7','8','9','⌫','0','OK'].map(function(k){return '<button data-key="'+k+'">'+k+'</button>';}).join('')+
+      '</div>'+
+      '<div class="prow"><button class="btn-close" data-pact="close">Zavřít</button></div>';
+  }
+  function renderSettings(){
+    document.getElementById('pcard').innerHTML=
+      '<h3>Nastavení pro rodiče</h3>'+
+      '<p>Sbírka aut: <b>'+store.lifetime+'</b> autíček.</p>'+
+      '<div class="prow"><button class="btn-reset" data-pact="reset">Vymazat garáž</button></div>'+
+      '<div class="prow"><button class="btn-close" data-pact="close">Hotovo</button></div>';
+  }
+
+  /* ---------- events (delegated) ---------- */
+  document.getElementById('app').addEventListener('click', function(e){
+    var t=e.target.closest('[data-action]'); if(!t) return;
+    var a=t.getAttribute('data-action');
+    if(a==='play-math') startQuestion('std','math');
+    else if(a==='play-count') startQuestion('std','count');
+    else if(a==='answer') answer(parseInt(t.getAttribute('data-val'),10));
+    else if(a==='toggle-help'){ S.showHelp=!S.showHelp; render(); }
+    else if(a==='next-harder') startQuestion('hard');
+    else if(a==='next-same') startQuestion(S.difficulty);
+    else if(a==='end-day') endDay();
+    else if(a==='back-home') backHome();
+    else if(a==='gear') openParent();
+  });
+  document.getElementById('parent').addEventListener('click', function(e){
+    if(e.target===this){ closeParent(); return; }
+    var key=e.target.closest('[data-key]'), pact=e.target.closest('[data-pact]');
+    if(key){
+      var k=key.getAttribute('data-key');
+      if(k==='⌫') gateVal=gateVal.slice(0,-1);
+      else if(k==='OK'){ if(gateVal==='17'){ renderSettings(); return; } var er=document.getElementById('gerr'); if(er)er.textContent='Zkus to znovu'; gateVal=''; }
+      else if(gateVal.length<2) gateVal+=k;
+      var gn=document.getElementById('gnum'); if(gn) gn.textContent=gateVal||'–';
+    } else if(pact){
+      var p=pact.getAttribute('data-pact');
+      if(p==='close') closeParent();
+      else if(p==='reset'){ store.lifetime=0; save(); renderSettings(); }
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
